@@ -22,6 +22,11 @@
     android:versionCode="1"
     android:versionName="1.0">
 
+    <uses-sdk
+        android:minSdkVersion="18"
+        android:targetSdkVersion="19" />
+    <uses-feature android:required="true" android:glEsVersion="0x00020000"/>
+    
     <!-- Min/target SDK versions (<uses-sdk>) managed by build.gradle -->
     
     <!-- Declare this required feature if you want to make the app available to BLE-capable

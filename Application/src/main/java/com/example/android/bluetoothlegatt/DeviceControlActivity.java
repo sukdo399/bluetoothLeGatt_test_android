@@ -31,9 +31,12 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ExpandableListView;
 import android.widget.SimpleExpandableListAdapter;
 import android.widget.TextView;
+import android.widget.Toast;
+import cm.example.android.mw.OSDCommon;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -65,9 +68,13 @@ public class DeviceControlActivity extends Activity {
     private final String LIST_NAME = "NAME";
     private final String LIST_UUID = "UUID";
 
+    private Button mBtnMagCalibrate;
+    private Button mBtnAccCalibrate;
+    
     // Code to manage Service lifecycle.
     private final ServiceConnection mServiceConnection = new ServiceConnection() {
 
+    	
         @Override
         public void onServiceConnected(ComponentName componentName, IBinder service) {
             mBluetoothLeService = ((BluetoothLeService.LocalBinder) service).getService();
@@ -148,30 +155,74 @@ public class DeviceControlActivity extends Activity {
     };
 
     private void clearUI() {
-        mGattServicesList.setAdapter((SimpleExpandableListAdapter) null);
+//        mGattServicesList.setAdapter((SimpleExpandableListAdapter) null);
         mDataField.setText(R.string.no_data);
     }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.gatt_services_characteristics);
+//        setContentView(R.layout.gatt_services_characteristics);
+        setContentView(R.layout.main_layout);
 
         final Intent intent = getIntent();
         mDeviceName = intent.getStringExtra(EXTRAS_DEVICE_NAME);
         mDeviceAddress = intent.getStringExtra(EXTRAS_DEVICE_ADDRESS);
 
         // Sets up UI references.
-        ((TextView) findViewById(R.id.device_address)).setText(mDeviceAddress);
-        mGattServicesList = (ExpandableListView) findViewById(R.id.gatt_services_list);
-        mGattServicesList.setOnChildClickListener(servicesListClickListner);
-        mConnectionState = (TextView) findViewById(R.id.connection_state);
+//        ((TextView) findViewById(R.id.device_address)).setText(mDeviceAddress);
+//        mGattServicesList = (ExpandableListView) findViewById(R.id.gatt_services_list);
+//        mGattServicesList.setOnChildClickListener(servicesListClickListner);
+//        mConnectionState = (TextView) findViewById(R.id.connection_state);
         mDataField = (TextView) findViewById(R.id.data_value);
 
         getActionBar().setTitle(mDeviceName);
         getActionBar().setDisplayHomeAsUpEnabled(true);
         Intent gattServiceIntent = new Intent(this, BluetoothLeService.class);
         bindService(gattServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
+        
+        mBtnMagCalibrate = (Button) findViewById( R.id.btn_calibrate_mag);
+        mBtnMagCalibrate.setOnClickListener( new View.OnClickListener() {
+			
+			@Override
+        	public void onClick(View arg0){
+	    		byte[] mspData = OSDCommon.getSimpleCommand(OSDCommon.MSPCommnand.MSP_MAG_CALIBRATION);
+	    		
+	    		if( mConnected == true && mspData != null)
+	    		{
+	    			mBluetoothLeService.WriteValue( mspData );
+	    			mDataField.append("Send ACC Calibration \n");
+	    		}
+	    		else
+	    		{
+	    			Toast.makeText( getBaseContext(), "Not Connected", Toast.LENGTH_SHORT ).show();
+	    			mDataField.append( "Not Connected \n");
+	    			
+	    		}
+			}
+		});
+		
+
+        mBtnAccCalibrate = (Button) findViewById( R.id.btn_calibrate_acc);
+        mBtnAccCalibrate.setOnClickListener( new View.OnClickListener() {
+			
+			@Override
+        	public void onClick(View arg0){
+	    		byte[] mspData = OSDCommon.getSimpleCommand(OSDCommon.MSPCommnand.MSP_ACC_CALIBRATION);
+	    		
+	    		if( mConnected == true && mspData != null)
+	    		{
+	    			mBluetoothLeService.WriteValue( mspData );
+	    			mDataField.append("Send ACC Calibration \n");
+	    		}
+	    		else
+	    		{
+	    			Toast.makeText( getBaseContext(), "Not Connected", Toast.LENGTH_SHORT ).show();
+	    			mDataField.append( "Not Connected \n");
+	    			
+	    		}
+			}
+		});        
     }
 
     @Override
@@ -230,7 +281,10 @@ public class DeviceControlActivity extends Activity {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                mConnectionState.setText(resourceId);
+//                mConnectionState.setText(resourceId);
+            	
+            	String connectionState = getResources().getString( resourceId);
+            	mDataField.append( "State: " + connectionState + "\n");;
             }
         });
     }
