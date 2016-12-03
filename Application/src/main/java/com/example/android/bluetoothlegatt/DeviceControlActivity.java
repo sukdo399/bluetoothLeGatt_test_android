@@ -26,12 +26,14 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
+import android.widget.SeekBar;
 import android.widget.ExpandableListView;
 import android.widget.SimpleExpandableListAdapter;
 import android.widget.TextView;
@@ -41,6 +43,8 @@ import cm.example.android.mw.OSDCommon;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 
 /**
  * For a given BLE device, this Activity provides the user interface to connect, display data,
@@ -70,6 +74,16 @@ public class DeviceControlActivity extends Activity {
 
     private Button mBtnMagCalibrate;
     private Button mBtnAccCalibrate;
+    private Button mBtnTakeOff;
+    private Button mBtnStop;
+    private SeekBar mSeekBar;
+    private int mValue = 0;
+    
+    private Timer timer;
+    private byte dataPackage[] = new byte[11];
+    Handler handler = new Handler();
+    
+    private static final int FPS = 14; // max 17
     
     // Code to manage Service lifecycle.
     private final ServiceConnection mServiceConnection = new ServiceConnection() {
@@ -174,7 +188,7 @@ public class DeviceControlActivity extends Activity {
 //        mGattServicesList = (ExpandableListView) findViewById(R.id.gatt_services_list);
 //        mGattServicesList.setOnChildClickListener(servicesListClickListner);
 //        mConnectionState = (TextView) findViewById(R.id.connection_state);
-        mDataField = (TextView) findViewById(R.id.data_value);
+        mDataField = (TextView) findViewById(R.id.textView);
 
         getActionBar().setTitle(mDeviceName);
         getActionBar().setDisplayHomeAsUpEnabled(true);
@@ -222,7 +236,76 @@ public class DeviceControlActivity extends Activity {
 	    			
 	    		}
 			}
-		});        
+		});
+        
+
+        mBtnTakeOff = (Button) findViewById( R.id.btn_takeoff);
+        mBtnTakeOff.setOnClickListener( new View.OnClickListener() {
+			
+			@Override
+        	public void onClick(View arg0){
+	    		byte[] mspData = OSDCommon.getSimpleCommand(OSDCommon.MSPCommnand.MSP_ARM);
+	    		
+	    		if( mConnected == true && mspData != null)
+	    		{
+	    			mBluetoothLeService.WriteValue( mspData );
+	    			mDataField.append("Send MSP_ARM \n");
+	    		}
+	    		else
+	    		{
+	    			Toast.makeText( getBaseContext(), "Not Connected", Toast.LENGTH_SHORT ).show();
+	    			mDataField.append( "Not Connected \n");
+	    			
+	    		}
+			}
+		});
+
+        mBtnStop = (Button) findViewById( R.id.btn_stop);
+        mBtnStop.setOnClickListener( new View.OnClickListener() {
+			
+			@Override
+        	public void onClick(View arg0){
+	    		byte[] mspData = OSDCommon.getSimpleCommand(OSDCommon.MSPCommnand.MSP_DISARM);
+	    		
+	    		if( mConnected == true && mspData != null)
+	    		{
+	    			mBluetoothLeService.WriteValue( mspData );
+	    			mDataField.append("Send MSP_DISARM \n");
+	    		}
+	    		else
+	    		{
+	    			Toast.makeText( getBaseContext(), "Not Connected", Toast.LENGTH_SHORT ).show();
+	    			mDataField.append( "Not Connected \n");
+	    			
+	    		}
+			}
+		});
+        
+        mSeekBar = (SeekBar) findViewById( R.id.seekBar );
+        mSeekBar.setProgress( mValue );
+        mSeekBar.setOnSeekBarChangeListener( new SeekBar.OnSeekBarChangeListener() {
+			
+			@Override
+			public void onStopTrackingTouch(SeekBar seekBar) {
+				// TODO Auto-generated method stub
+				
+			}
+			
+			@Override
+			public void onStartTrackingTouch(SeekBar seekBar) {
+				// TODO Auto-generated method stub
+				
+			}
+			
+			@Override
+			public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+				// TODO Auto-generated method stub
+				Log.d( TAG, "OnProgressChanged: " + progress);
+				mValue = progress;
+				
+			}
+		});
+        
     }
 
     @Override
@@ -360,4 +443,95 @@ public class DeviceControlActivity extends Activity {
         intentFilter.addAction(BluetoothLeService.ACTION_DATA_AVAILABLE);
         return intentFilter;
     }
+    
+
+	private void initDataPackage(){
+		dataPackage[0] = '$';
+		dataPackage[1] = 'M';
+		dataPackage[2] = '<';
+		dataPackage[3] = 4;
+		dataPackage[4] = (byte)(OSDCommon.MSPCommnand.MSP_SET_RAW_RC_TINY.value());
+		
+		updateDataPackage();
+	}
+	
+    private void updateDataPackage(){
+		byte checkSum = 0;
+	    
+	    int dataSizeIdx = 3;
+	    int checkSumIdx = 10;
+	    
+	    dataPackage[dataSizeIdx] = 5;
+	    
+	    checkSum ^= (dataPackage[dataSizeIdx] & 0xFF);
+	    checkSum ^= (dataPackage[dataSizeIdx + 1] & 0xFF);
+	    
+	    dataPackage[5] = (byte)0x7D;
+	    checkSum ^= (dataPackage[5] & 0xFF);
+
+	    dataPackage[6] = (byte)0x7D;
+	    checkSum ^= (dataPackage[6] & 0xFF);
+	    
+	    dataPackage[7] = (byte)0x7D;
+	    checkSum ^= (dataPackage[7] & 0xFF);
+	    
+	    dataPackage[8] = (byte) (mValue & 0xFF);
+	    checkSum ^= (dataPackage[8] & 0xFF);
+	    
+	    dataPackage[9] = (byte)0x55;
+	    checkSum ^= (dataPackage[9] & 0xFF);
+    
+	    
+	    dataPackage[checkSumIdx] = (byte) checkSum;
+	}
+
+    
+    
+	public void start(){
+		stop();
+		
+		initDataPackage();
+		
+		timer = new Timer();
+		timer.schedule(new TimerTask() {
+			
+			@Override
+			public void run() {
+				handler.post(new Runnable() {
+					
+					@Override
+					public void run() {
+						transmmit();						
+					}
+				});
+				
+			}
+		}, 0, 1000 / FPS);
+	}
+	
+	public void stop(){
+		if (timer != null) {
+			timer.cancel();
+			timer = null;
+		}
+	}
+	
+	private void transmmit()
+	{
+		updateDataPackage();
+		
+		if(mConnected == true && dataPackage != null)
+		{
+			mBluetoothLeService.WriteValue(dataPackage);;
+		}
+		else
+		{
+			Toast.makeText( getBaseContext(), "Not Connected", Toast.LENGTH_SHORT ).show();
+			mDataField.append( "Not Connected \n");
+		}
+	}
+
+    
+    
+    
 }
